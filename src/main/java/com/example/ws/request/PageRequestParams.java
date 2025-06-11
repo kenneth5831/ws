@@ -1,4 +1,4 @@
-package com.example.ws.entity;
+package com.example.ws.request;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;

@@ -5,8 +5,12 @@ import com.example.ws.entity.Customer;
 import com.example.ws.entity.Order;
 import com.example.ws.mapper.OrderMapper;
 import com.example.ws.mapper.CustomerMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,16 +23,26 @@ public class StatisticsController {
     @Resource
     private CustomerMapper customerMapper;
 
-    // 統計訂單數大於 n 的會員
+    @Operation(summary = "統計訂單數大於指定數量的會員列表",
+            description = "回傳所有訂單數量大於 n 的會員資料")
     @GetMapping("/customers_by_orders")
-    public List<Customer> getCustomersByOrderCount(@RequestParam int n) {
-        List<Long> customerIds = orderMapper.selectList(
+    public List<Customer> getCustomersByOrderCount(
+            @Parameter(description = "訂單數量閾值", required = true, example = "5")
+            @RequestParam int n) {
+
+        List<Long> customerIds = orderMapper.selectObjs(
                         new LambdaQueryWrapper<Order>()
+                                .select(Order::getCustomerId)
                                 .groupBy(Order::getCustomerId)
                                 .having("COUNT(id) > {0}", n)
-                ).stream() // Convert List to Stream
-                .map(Order::getCustomerId) // Map to customerId
-                .collect(Collectors.toList()); // Collect back to List
-        return customerMapper.selectBatchIds(customerIds);
+                ).stream()
+                .map(obj -> Long.parseLong(obj.toString()))
+                .collect(Collectors.toList());
+
+        if (customerIds.isEmpty()) {
+            return Collections.emptyList();
+        } else {
+            return customerMapper.selectBatchIds(customerIds);
+        }
     }
 }
