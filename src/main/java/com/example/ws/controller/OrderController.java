@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ws.dto.ApiResponse;
+import com.example.ws.dto.CustomerDTO;
 import com.example.ws.dto.OrderDTO;
 import com.example.ws.entity.Order;
 import com.example.ws.entity.Product;
@@ -47,7 +48,7 @@ public class OrderController {
 
     @Operation(summary = "新增訂單")
     @PostMapping
-    public ApiResponse<Order> create(@RequestBody OrderDTO dto) {
+    public ApiResponse<OrderDTO> create(@RequestBody OrderDTO dto) {
         Order order = dto.toEntity();
 
         Product p = productMapper.selectById(order.getProductId());
@@ -67,7 +68,7 @@ public class OrderController {
         order.setTotalAmount(p.getPrice().multiply(BigDecimal.valueOf(order.getQuantity())));
         log.info("[訂單號] {}", order.getOrderNo());
         orderMapper.insert(order);
-        return ApiResponse.ok(order);
+        return ApiResponse.ok(OrderDTO.from(order));
     }
 
     @Operation(summary = "刪除訂單")
@@ -79,25 +80,33 @@ public class OrderController {
 
     @Operation(summary = "更新訂單")
     @PutMapping("/{id}")
-    public ApiResponse<Order> update(@PathVariable Long id, @RequestBody OrderDTO dto) {
+    public ApiResponse<OrderDTO> update(@PathVariable Long id, @RequestBody OrderDTO dto) {
         Order order = dto.toEntity();
         order.setId(id);
         int updated = orderMapper.updateById(order);
         if (updated == 0) throw new RuntimeException("更新失敗，可能是版本不一致");
-        return ApiResponse.ok(orderMapper.selectById(id));
+        return ApiResponse.ok(OrderDTO.from(orderMapper.selectById(id)));
     }
 
     @Operation(summary = "分頁查詢訂單", description = "根據訂單編號、產品名稱或購買日期範圍進行分頁查詢")
     @GetMapping
-    public ApiResponse<IPage<Order>> getPage(
+    public ApiResponse<IPage<OrderDTO>> getPage(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") long size,
+            @RequestParam(required = true) long customerId,
             @RequestParam(required = false) String orderNo,
             @RequestParam(required = false) String productName,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
         Page<Order> pageParam = new PageRequestParams<>(page, size);
         LambdaQueryWrapper<Order> query = new LambdaQueryWrapper<>();
+
+        // 檢查客戶是否存在
+        if(!customerMapper.existsById(customerId)){
+            return ApiResponse.fail("100006","無效的用戶");
+        }
+
+        query.eq(Order::getCustomerId, customerId);
 
         // 訂單編號查詢 (精確匹配)
         if (StringUtils.isNotBlank(orderNo)) {
@@ -122,7 +131,8 @@ public class OrderController {
             }
         }
 
-        IPage<Order> result = orderMapper.selectPage(pageParam, query);
-        return ApiResponse.ok(result);
+        IPage<Order> orderPage = orderMapper.selectPage(pageParam, query);
+        IPage<OrderDTO> dtoPage = orderPage.convert(OrderDTO::from);
+        return ApiResponse.ok(dtoPage);
     }
 }
