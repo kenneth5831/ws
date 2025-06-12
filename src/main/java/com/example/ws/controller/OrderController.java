@@ -1,41 +1,68 @@
 package com.example.ws.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ws.dto.ApiResponse;
 import com.example.ws.dto.OrderDTO;
-import com.example.ws.request.OrderRequest;
 import com.example.ws.entity.Order;
-import com.example.ws.request.PageRequestParams;
 import com.example.ws.entity.Product;
-import com.example.ws.mapper.OrderMapper;
 import com.example.ws.mapper.CustomerMapper;
 import com.example.ws.mapper.ProductMapper;
+import com.example.ws.request.PageRequestParams;
+import com.example.ws.mapper.OrderMapper;
+import com.example.ws.util.OrderUtil;
+import lombok.extern.slf4j.Slf4j;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.transaction.annotation.Transactional;
+import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Random;
 
 @Tag(name = "Order API", description = "訂單資料管理接口")
 @RestController
 @RequestMapping("/api/orders")
+@Slf4j
 public class OrderController {
 
     @Resource
     private OrderMapper orderMapper;
 
+    @Resource
+    private OrderUtil orderUtil;
+
+    @Resource
+    private ProductMapper productMapper;
+
+    @Resource
+    private CustomerMapper customerMapper;
+
     @Operation(summary = "新增訂單")
     @PostMapping
     public ApiResponse<Order> create(@RequestBody OrderDTO dto) {
         Order order = dto.toEntity();
+
+        Product p = productMapper.selectById(order.getProductId());
+        if(ObjectUtils.isEmpty(p)){
+            return ApiResponse.fail("100004","無效的產品編號");
+        }
+
+        if(order.getQuantity()<=0){
+            return ApiResponse.fail("100005","無效的訂單數量");
+        }
+
+        if(!customerMapper.existsById(order.getCustomerId())){
+            return ApiResponse.fail("100006","無效的用戶");
+        }
+
+        order.setOrderNo(orderUtil.generateOrderNumber());
+        order.setTotalAmount(p.getPrice().multiply(BigDecimal.valueOf(order.getQuantity())));
+        log.info("[訂單號] {}", order.getOrderNo());
         orderMapper.insert(order);
         return ApiResponse.ok(order);
     }
