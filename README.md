@@ -66,13 +66,6 @@
 | **不常改動**   | X          | V (必要時)          | X              | customer |
 | **新增多，更新少** | X          | V (更新時)          | X              | order    |
 
-
-1. Redis SETNX 加鎖（product:{id}）
-2. 查庫存（SELECT）
-3. 判斷庫存是否足夠
-4. 減庫存並 updateById（MyBatis-Plus 樂觀鎖）
-5. Redis DEL 解鎖
-
 ### 樂觀鎖與軟刪除實作細節
 - 樂觀鎖：所有 Entity 繼承 BaseEntity，並使用 @Version 欄位控制
 - 軟刪除：啟用 @TableLogic 並於資料表中新增 deleted 欄位（預設 0）
