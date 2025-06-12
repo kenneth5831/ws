@@ -22,6 +22,7 @@ public class CustomerDTO {
         dto.id = c.getId();
         dto.name = c.getName();
         dto.email = c.getEmail();
+        dto.version = c.getVersion();
         return dto;
     }
 
