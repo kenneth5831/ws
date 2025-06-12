@@ -42,3 +42,12 @@ CREATE TABLE `order` (
 CREATE INDEX idx_order_customer ON `order` (customer_id);
 CREATE INDEX idx_order_product ON `order` (product_id);
 CREATE INDEX idx_order_purchase_date ON `order` (purchase_date);
+
+
+CREATE TABLE sequence (
+                          name VARCHAR(50) PRIMARY KEY,
+                          current_value BIGINT NOT NULL
+);
+
+-- 初始流水號
+INSERT INTO sequence (name, current_value) VALUES ('order', 0);
