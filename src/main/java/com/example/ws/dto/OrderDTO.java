@@ -4,6 +4,7 @@ import com.example.ws.entity.Order;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -11,6 +12,9 @@ import java.time.LocalDateTime;
 public class OrderDTO {
     @Schema(description = "訂單 ID", example = "10001")
     public Long id;
+
+    @NotBlank(message = "請求 ID 不可為空")
+    public String requestId; // 新增唯一請求 ID
 
     @Schema(description = "客戶 ID", example = "1")
     @NotNull(message = "客戶 ID 不可為空")
@@ -48,6 +52,7 @@ public class OrderDTO {
         Order order = new Order();
         order.setCustomerId(this.customerId);
         order.setProductId(this.productId);
+        order.setQuantity(this.quantity);
         order.setQuantity(this.quantity);
         return order;
     }

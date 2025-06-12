@@ -1,5 +1,6 @@
 package com.example.ws.util;
 
+import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
@@ -42,5 +43,17 @@ public class RedisUtil {
             lock.unlock();
         }
     }
+
+    public String getExistingOrderNo(String requestKey){
+        RBucket<String> bucket = redissonClient.getBucket(requestKey);
+        String existingOrderNo = bucket.get();
+        return existingOrderNo;
+    }
+
+    public void setRequestBucket(String requestKey, String orderNo) {
+        RBucket<String> bucket = redissonClient.getBucket(requestKey);
+        bucket.set(orderNo, 1, TimeUnit.HOURS); // 存儲 1 小時
+    }
+
 }
 

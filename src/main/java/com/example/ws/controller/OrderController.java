@@ -29,7 +29,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Random;
 
 @Tag(name = "Order API", description = "訂單資料管理接口")
 @RestController
@@ -56,6 +55,19 @@ public class OrderController {
     @PostMapping
     @Transactional
     public ApiResponse<OrderDTO> create(@RequestBody OrderDTO dto) {
+
+        // 檢查冪等性
+        String requestKey = "order:request:" + dto.requestId;
+        String existingOrderNo = redisUtil.getExistingOrderNo(requestKey);
+        if (existingOrderNo != null) {
+            // 重複請求，返回已創建的訂單
+            Order existingOrder = orderMapper.selectOne(
+                    new LambdaQueryWrapper<Order>().eq(Order::getOrderNo, existingOrderNo));
+            if (existingOrder != null) {
+                return ApiResponse.ok(OrderDTO.from(existingOrder));
+            }
+        }
+
         Order order = dto.toEntity();
 
         Product product = productMapper.selectById(order.getProductId());
@@ -102,6 +114,10 @@ public class OrderController {
             order.setTotalAmount(product.getPrice().multiply(BigDecimal.valueOf(order.getQuantity())));
             log.info("[訂單號] {}", order.getOrderNo());
             orderMapper.insert(order);
+
+            // 記錄請求以確保冪等
+            redisUtil.setRequestBucket(requestKey,order.getOrderNo()); // 存儲 1 小時
+
             return ApiResponse.ok(OrderDTO.from(order));
         } finally {
             // 5. RedisUtil 解鎖
