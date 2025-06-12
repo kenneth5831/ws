@@ -20,4 +20,8 @@ public record ApiResponse<T>(
     public static <T> ApiResponse<T> fail(String code, String message) {
         return new ApiResponse<>(false, message, code,null, LocalDateTime.now());
     }
+
+    public static ApiResponse<String> error(String message) {
+        return new ApiResponse<>(false, message, "99998",null, LocalDateTime.now());
+    }
 }
