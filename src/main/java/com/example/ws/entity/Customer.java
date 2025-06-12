@@ -2,8 +2,9 @@ package com.example.ws.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
-import java.time.LocalDateTime;
 
 @Data
 @TableName("customer")
@@ -14,9 +15,11 @@ public class Customer extends AuditableEntity {
     private Long id;
 
     @Schema(description = "客戶名稱", example = "王小明")
+    @NotBlank(message = "姓名不可為空")
     private String name;
 
     @Schema(description = "電子郵件", example = "test@example.com")
+    @Email(message = "無效的電子郵件格式")
     private String email;
 
 }

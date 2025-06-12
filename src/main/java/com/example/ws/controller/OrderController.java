@@ -13,12 +13,15 @@ import com.example.ws.request.PageRequestParams;
 import com.example.ws.mapper.OrderMapper;
 import com.example.ws.util.OrderUtil;
 import com.example.ws.util.RedisUtil;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -108,23 +111,61 @@ public class OrderController {
 
     @Operation(summary = "刪除訂單")
     @DeleteMapping("/{id}")
+    @Transactional
+    @CacheEvict(value = "orders", allEntries = true)
     public ApiResponse<Void> delete(@PathVariable Long id) {
+        // 檢查訂單是否存在
+        Order order = orderMapper.selectById(id);
+        if (order == null) {
+            return ApiResponse.fail("100011", "訂單不存在，ID：" + id);
+        }
+
+        // 恢復庫存
+        Product product = productMapper.selectById(order.getProductId());
+        if (product != null) {
+            String lockKey = "product:stock:" + order.getProductId();
+            boolean locked = redisUtil.lock(lockKey, 10);
+            if (!locked) {
+                return ApiResponse.fail("100008", "無法取得產品庫存鎖，請稍後重試");
+            }
+            try {
+                product.setStock(product.getStock() + order.getQuantity());
+                int updated = productMapper.updateById(product);
+                if (updated == 0) {
+                    return ApiResponse.fail("100010", "庫存恢復失敗，可能是並發修改");
+                }
+            } finally {
+                redisUtil.unlock(lockKey);
+            }
+        }
+
         orderMapper.deleteById(id);
         return ApiResponse.ok();
     }
 
     @Operation(summary = "更新訂單")
     @PutMapping("/{id}")
-    public ApiResponse<OrderDTO> update(@PathVariable Long id, @RequestBody OrderDTO dto) {
+    @Transactional
+    @CacheEvict(value = "orders", allEntries = true)
+    public ApiResponse<OrderDTO> update(@PathVariable Long id, @Valid @RequestBody OrderDTO dto) {
+        // 檢查訂單是否存在
+        Order existingOrder = orderMapper.selectById(id);
+        if (existingOrder == null) {
+            return ApiResponse.fail("100011", "訂單不存在，ID：" + id);
+        }
+
         Order order = dto.toEntity();
         order.setId(id);
         int updated = orderMapper.updateById(order);
-        if (updated == 0) throw new RuntimeException("更新失敗，可能是版本不一致");
+        if (updated == 0) {
+            return ApiResponse.fail("100012", "更新失敗，可能是版本不一致");
+        }
         return ApiResponse.ok(OrderDTO.from(orderMapper.selectById(id)));
     }
 
     @Operation(summary = "分頁查詢訂單", description = "根據訂單編號、產品名稱或購買日期範圍進行分頁查詢")
     @GetMapping
+    @Cacheable(value = "orders", key = "'page_' + #page + '_' + #size + '_' + #customerId + '_' + #orderNo + '_' + #productName + '_' + #startDate + '_' + #endDate")
     public ApiResponse<IPage<OrderDTO>> getPage(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") long size,

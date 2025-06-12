@@ -1,5 +1,6 @@
 package com.example.ws.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ws.dto.ApiResponse;
@@ -11,7 +12,11 @@ import com.example.ws.util.RedisUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Product API", description = "商品資料管理接口")
@@ -36,40 +41,49 @@ public class ProductController {
         return ApiResponse.ok(product);
     }
 
-    @Operation(summary = "刪除商品")
+    @Operation(summary = "刪除產品")
     @DeleteMapping("/{id}")
+    @Transactional
+    @CacheEvict(value = "products", key = "#id")
     public ApiResponse<Void> delete(@PathVariable Long id) {
+        if (!productMapper.existsById(id)) {
+            return ApiResponse.fail("100015", "產品不存在，ID：" + id);
+        }
         productMapper.deleteById(id);
         return ApiResponse.ok();
     }
 
-    @Operation(summary = "更新商品")
+    @Operation(summary = "更新產品")
     @PutMapping("/{id}")
-    public ApiResponse<Product> update(@PathVariable Long id, @RequestBody ProductDTO dto) {
-        String lockKey = "product:lock:" + id;
-        if (redisUtil.lock(lockKey, 5)) {// 鎖 5 秒
-            return ApiResponse.fail("10003", "系統忙碌中，請稍後再試"); // 鎖取得失敗
+    @Transactional
+    @CacheEvict(value = "products", key = "#id")
+    public ApiResponse<Product> update(@PathVariable Long id, @Valid @RequestBody Product product) {
+        if (!productMapper.existsById(id)) {
+            return ApiResponse.fail("100015", "產品不存在，ID：" + id);
         }
-
-        try {
-            Product product = dto.toEntity();
-            product.setId(id);
-            int updated = productMapper.updateById(product);
-            if (updated == 0) throw new RuntimeException("更新失敗，可能是版本不一致");
-            return ApiResponse.ok(productMapper.selectById(id));
-        } finally {
-            redisUtil.unlock(lockKey); // 解鎖
+        if (productMapper.exists(new LambdaQueryWrapper<Product>()
+                .eq(Product::getName, product.getName())
+                .ne(Product::getId, id))) {
+            return ApiResponse.fail("100014", "產品名稱已被其他產品使用");
         }
+        product.setId(id);
+        int updated = productMapper.updateById(product);
+        if (updated == 0) {
+            return ApiResponse.fail("100016", "更新失敗，可能是版本不一致");
+        }
+        return ApiResponse.ok(productMapper.selectById(id));
     }
 
     @Operation(summary = "取得商品")
     @GetMapping("/{id}")
-    public ApiResponse<Product> getById(@PathVariable Long id) {
-        return ApiResponse.ok(productMapper.selectById(id));
+    @Cacheable(value = "products", key = "#id")
+    public Product selectById(Long id) {
+        return productMapper.selectById(id);
     }
 
     @Operation(summary = "分頁查詢商品")
     @GetMapping
+    @Cacheable(value = "products", key = "'page_' + #page + '_' + #size")
     public ApiResponse<IPage<Product>> getPage(@RequestParam(defaultValue = "1") int page,
                                                @RequestParam(defaultValue = "10") int size) {
         Page<Product> pageParam = new PageRequestParams(page, size);
