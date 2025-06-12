@@ -21,13 +21,15 @@
 | **資料庫相關** | MySQL |MySQL 資料庫|
 | **資料庫相關**| MySQL Connector|連接 MySQL 資料庫|
 | **資料庫相關**| HikariCP|資料庫連線池|
-| **緩存**| Redis (Jedis)|快取與分布式鎖應用|
+| **緩存**| Redis|快取與分布式鎖應用|
 | **API文檔**| Swagger UI / OpenAPI|API 文件|
 | **構建工具**| Maven||
 
 ### 前置條件
 - JDK 17
 - Maven 3.9.10
+- Docker
+- MySQL
 
 ### 運行應用
 - API接口: http://localhost:8080
@@ -40,8 +42,12 @@
 - 步驟:
 1. 確保本機已安裝 JDK 17+、Maven、MySQL、Redis
 2. 建立資料庫與資料表
-3. 修改 `application.application` 中的資料庫設定
-4. 執行啟動指令：
+3. 建立redis 
+   - 安裝docker desktop
+   - `bash` 
+   `docker run -d -p 8182:6379 --name redis redis`
+4. 修改 `application.properties` 中的資料庫設定
+5. 執行啟動指令：
 `bash`
 `mvn spring-boot:run`
 
