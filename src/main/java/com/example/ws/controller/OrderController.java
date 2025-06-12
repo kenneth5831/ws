@@ -1,5 +1,6 @@
 package com.example.ws.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ws.dto.ApiResponse;
@@ -16,11 +17,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Random;
 
@@ -84,17 +87,42 @@ public class OrderController {
         return ApiResponse.ok(orderMapper.selectById(id));
     }
 
-    @Operation(summary = "取得訂單")
-    @GetMapping("/{id}")
-    public ApiResponse<Order> getById(@PathVariable Long id) {
-        return ApiResponse.ok(orderMapper.selectById(id));
-    }
-
-    @Operation(summary = "分頁查詢訂單")
+    @Operation(summary = "分頁查詢訂單", description = "根據訂單編號、產品名稱或購買日期範圍進行分頁查詢")
     @GetMapping
-    public ApiResponse<IPage<Order>> getPage(@RequestParam(defaultValue = "1") int page,
-                                             @RequestParam(defaultValue = "10") int size) {
-        Page<Order> pageParam = new PageRequestParams(page, size);
-        return ApiResponse.ok(orderMapper.selectPage(pageParam, null));
+    public ApiResponse<IPage<Order>> getPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") long size,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        Page<Order> pageParam = new PageRequestParams<>(page, size);
+        LambdaQueryWrapper<Order> query = new LambdaQueryWrapper<>();
+
+        // 訂單編號查詢 (精確匹配)
+        if (StringUtils.isNotBlank(orderNo)) {
+            query.eq(Order::getOrderNo, orderNo);
+        }
+
+        // 產品名稱查詢 (模糊匹配，通過子查詢)
+        if (StringUtils.isNotBlank(productName)) {
+            query.inSql(Order::getProductId,
+                    "SELECT id FROM product WHERE name LIKE '%" + productName.replace("'", "''") + "%'");
+        }
+
+        // 購買日期範圍查詢
+        if (StringUtils.isNotBlank(startDate) && StringUtils.isNotBlank(endDate)) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                LocalDateTime start = LocalDate.parse(startDate, formatter).atStartOfDay();
+                LocalDateTime end = LocalDate.parse(endDate, formatter).atTime(23, 59, 59);
+                query.between(Order::getPurchaseDate, start, end);
+            } catch (Exception e) {
+                return ApiResponse.fail("100007", "無效的日期格式，應為 yyyy-MM-dd");
+            }
+        }
+
+        IPage<Order> result = orderMapper.selectPage(pageParam, query);
+        return ApiResponse.ok(result);
     }
 }
