@@ -3,7 +3,6 @@ package com.example.ws.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ws.dto.ApiResponse;
-import com.example.ws.dto.OrderDTO;
 import com.example.ws.dto.ProductDTO;
 import com.example.ws.entity.Product;
 import com.example.ws.mapper.ProductMapper;
@@ -13,12 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.bind.annotation.*;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.UUID;
 
 @Tag(name = "Product API", description = "商品資料管理接口")
 @RestController
@@ -85,32 +79,17 @@ public class ProductController {
     @PutMapping("/lock-test/{id}")
     public ApiResponse<String> testLock(@PathVariable Long id) {
         String lockKey = "product:lock:" + id;
-        String lockValue = UUID.randomUUID().toString();
-        Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, lockValue, Duration.ofSeconds(10));
-
-        if (Boolean.TRUE.equals(success)) {
+        boolean locked = redisUtil.lock(lockKey, 10);
+        if (locked) {
             try {
-                // 模擬業務邏輯
-                Thread.sleep(3000); // 或處理更新邏輯
+                // 業務邏輯
+                Thread.sleep(3000);
                 return ApiResponse.ok("成功獲取鎖並處理 product " + id);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return ApiResponse.error("執行中斷");
             } finally {
-                // 使用 Lua 腳本避免刪到別人加的鎖
-                // TODO 可以用 Redisson 套件代替Lua腳本 實現redis delete
-                String luaScript = """
-                if redis.call("get", KEYS[1]) == ARGV[1] then
-                    return redis.call("del", KEYS[1])
-                else
-                    return 0
-                end
-                """;
-                stringRedisTemplate.execute(
-                        new DefaultRedisScript<>(luaScript, Long.class),
-                        Collections.singletonList(lockKey),
-                        lockValue
-                );
+                redisUtil.unlock(lockKey);
             }
         } else {
             return ApiResponse.error("目前有其他操作正在進行，請稍後再試");
