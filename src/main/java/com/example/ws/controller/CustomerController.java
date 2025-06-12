@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Customer API", description = "客戶資料管理接口")
@@ -41,19 +42,18 @@ public class CustomerController {
 
     @Operation(summary = "更新客戶資料", description = "根據 ID 修改對應客戶資料")
     @PutMapping("/{id}")
-    public ApiResponse<CustomerDTO> update(
-            @Parameter(description = "客戶 ID", example = "1")
-            @PathVariable Long id,
-            @RequestBody CustomerDTO dto) {
+    public ApiResponse<CustomerDTO> update(@RequestBody CustomerDTO dto) {
         Customer customer = dto.toEntity();
-        customer.setId(id);
+        if(ObjectUtils.anyNull(customer.getId(),customer.getVersion())){
+            return ApiResponse.fail("10003", "更新失敗，必填參數未填");
+        }
 
         int updated = customerMapper.updateById(customer);
         if (updated == 0) {
             return ApiResponse.fail("10001", "更新失敗，可能是版本不一致（樂觀鎖觸發）");
         }
 
-        Customer updatedCustomer = customerMapper.selectById(id);
+        Customer updatedCustomer = customerMapper.selectById(customer.getId());
         return ApiResponse.ok(CustomerDTO.from(updatedCustomer));
     }
 
@@ -77,7 +77,7 @@ public class CustomerController {
             @Parameter(description = "每頁筆數", example = "10")
             @RequestParam(defaultValue = "10") int size) {
 
-        Page<Customer> pageParam = new PageRequestParams(page, size);
+        Page<Customer> pageParam = new PageRequestParams<>(page, size);
         IPage<Customer> customerPage = customerMapper.selectPage(pageParam, null);
 
         IPage<CustomerDTO> dtoPage = customerPage.convert(CustomerDTO::from);
